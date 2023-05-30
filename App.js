@@ -1,107 +1,101 @@
 import { StatusBar } from 'expo-status-bar';
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, Button, FlatList } from 'react-native';
+import axios from 'react-native-axios';
+
+const serverURL = 'http://192.168.88.229:3001'; 
 
 export default function App() {
-  const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = () => {
+    axios
+      .get(`${serverURL}/tasks`)
+      .then((response) => {
+        setTasks(response.data);
+      })
+      .catch((error) => {
+        console.error('Error retrieving tasks:', error);
+      });
+  };
 
   const addTask = () => {
     if (title.trim() === '' || description.trim() === '') {
       return;
     }
-    setTasks((prevTasks) => [
-      ...prevTasks,
-      { id: Math.random().toString(), title, description, completed: false },
-    ]);
-    setTitle('');
-    setDescription('');
+
+    axios
+      .post(`${serverURL}/tasks`, { title, description })
+      .then((response) => {
+        setTasks((prevTasks) => [...prevTasks, response.data]);
+        setTitle('');
+        setDescription('');
+      })
+      .catch((error) => {
+        console.error('Error creating task:', error);
+      });
   };
 
-  const editTask = (taskId) => {
-    const taskToEdit = tasks.find((task) => task.id === taskId);
-    if (!taskToEdit) {
+  const updateTask = (taskId) => {
+    const updatedTask = tasks.find((task) => task._id === taskId);
+
+    if (!updatedTask) {
       return;
     }
-    setTitle(taskToEdit.title);
-    setDescription(taskToEdit.description);
-    setEditingTaskId(taskId);
-  };
 
-  const updateTask = () => {
-    if (title.trim() === '' || description.trim() === '' || !editingTaskId) {
-      return;
-    }
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === editingTaskId ? { ...task, title, description } : task
-      )
-    );
-    setTitle('');
-    setDescription('');
-    setEditingTaskId(null);
-  };
-
-  const toggleComplete = (taskId) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      )
-    );
+    axios
+      .put(`${serverURL}/tasks/${taskId}`, updatedTask)
+      .then(() => {
+        fetchTasks();
+      })
+      .catch((error) => {
+        console.error('Error updating task:', error);
+      });
   };
 
   const deleteTask = (taskId) => {
-    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
+    axios
+      .delete(`${serverURL}/tasks/${taskId}`)
+      .then(() => {
+        setTasks((prevTasks) => prevTasks.filter((task) => task._id !== taskId));
+      })
+      .catch((error) => {
+        console.error('Error deleting task:', error);
+      });
   };
+
+
 
   return (
     <View style={styles.container}>
-      
       <FlatList
         data={tasks}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         renderItem={({ item }) => (
           <View style={styles.task}>
-            <Text
-              style={[
-                styles.taskTitle,
-                item.completed && styles.completedTask,
-              ]}
-            >
-              {item.title}
-            </Text>
-            <Text
-              style={[
-                styles.taskDescription,
-                item.completed && styles.completedTask,
-              ]}
-            >
-              {item.description}
-            </Text>
+            <Text style={styles.taskTitle}>{item.title}</Text>
+            <Text style={styles.taskDescription}>{item.description}</Text>
             <View style={styles.buttonContainer}>
               <Button
-                title="Edit"
-                onPress={() => editTask(item.id)}
+                title="Update"
+                onPress={() => updateTask(item._id)}
                 color="#2089dc"
               />
               <Button
-                title={item.completed ? 'Undo' : 'Complete'}
-                onPress={() => toggleComplete(item.id)}
-                color={item.completed ? '#ccc' : '#2089dc'}
-              />
-              <Button
                 title="Delete"
-                onPress={() => deleteTask(item.id)}
+                onPress={() => deleteTask(item._id)}
                 color="red"
               />
             </View>
           </View>
         )}
       />
-
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -115,26 +109,10 @@ export default function App() {
           value={description}
           onChangeText={(text) => setDescription(text)}
         />
-        {editingTaskId ? (
-          <View style={styles.buttonContainer}>
-            <Button title="Update Task" onPress={updateTask} />
-            <Button
-              title="Cancel"
-              onPress={() => {
-                setTitle('');
-                setDescription('');
-                setEditingTaskId(null);
-              }}
-              color="red"
-            />
-          </View>
-        ) : (
-          <Button title="Add Task" onPress={addTask} />
-        )}
+        <Button title="Add Task" onPress={addTask} />
       </View>
-
+    
       <StatusBar style="auto" />
-
     </View>
   );
 }
@@ -158,11 +136,11 @@ const styles = StyleSheet.create({
   },
   task: {
     marginBottom: 10,
+    marginTop: 20,
     padding: 10,
     borderColor: '#ccc',
     borderWidth: 1,
     borderRadius: 4,
-    marginTop: 20
   },
   taskTitle: {
     fontSize: 18,
@@ -171,10 +149,6 @@ const styles = StyleSheet.create({
   },
   taskDescription: {
     fontSize: 16,
-  },
-  completedTask: {
-    textDecorationLine: 'line-through',
-    color: '#aaa',
   },
   buttonContainer: {
     flexDirection: 'row',
